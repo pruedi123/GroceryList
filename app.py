@@ -16,7 +16,9 @@ CUSTOM_ITEMS_FILE = Path(__file__).parent / "custom_items.json"
 
 
 def load_preferences():
-    """Load item preferences from file."""
+    """Load item preferences from file (local only)."""
+    if IS_CLOUD:
+        return {}
     if PREFS_FILE.exists():
         try:
             with open(PREFS_FILE, "r") as f:
@@ -38,7 +40,9 @@ def save_preferences(data):
 
 
 def load_custom_brands():
-    """Load custom brands from file."""
+    """Load custom brands from file (local only)."""
+    if IS_CLOUD:
+        return {}
     if CUSTOM_BRANDS_FILE.exists():
         try:
             with open(CUSTOM_BRANDS_FILE, "r") as f:
@@ -60,7 +64,9 @@ def save_custom_brands(data):
 
 
 def load_hidden_items():
-    """Load hidden/deleted items from file."""
+    """Load hidden/deleted items from file (local only)."""
+    if IS_CLOUD:
+        return set()
     if HIDDEN_ITEMS_FILE.exists():
         try:
             with open(HIDDEN_ITEMS_FILE, "r") as f:
@@ -82,7 +88,9 @@ def save_hidden_items(data):
 
 
 def load_custom_items():
-    """Load custom items from file. Format: {category: {item: unit}}"""
+    """Load custom items from file (local only). Format: {category: {item: unit}}"""
+    if IS_CLOUD:
+        return {}
     if CUSTOM_ITEMS_FILE.exists():
         try:
             with open(CUSTOM_ITEMS_FILE, "r") as f:
