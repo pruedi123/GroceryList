@@ -1,0 +1,32 @@
+{
+  "Whole Milk": {
+    "qty": 1,
+    "unit": "half gallon",
+    "brand": "Fairlife"
+  },
+  "Butter (Unsalted)": {
+    "qty": 1,
+    "unit": "stick",
+    "brand": "Land O'Lakes"
+  },
+  "Sour Cream": {
+    "qty": 1,
+    "unit": "16 oz",
+    "brand": "Daisy"
+  },
+  "Cottage Cheese": {
+    "qty": 1,
+    "unit": "16 oz",
+    "brand": "Prairie Farms"
+  },
+  "Cream Cheese": {
+    "qty": 1,
+    "unit": "8 oz",
+    "brand": "Philadelphia"
+  },
+  "Eggs (Large)": {
+    "qty": 1,
+    "unit": "dozen",
+    "brand": "Vital Farms"
+  }
+}
