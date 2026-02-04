@@ -5,7 +5,10 @@ import streamlit as st
 import json
 from pathlib import Path
 
-# File for persisting item preferences (brand/unit choices)
+# Detect if running on Streamlit Cloud (apps run from /mount/src/)
+IS_CLOUD = str(Path(__file__).parent).startswith("/mount/src")
+
+# File for persisting item preferences (local only)
 PREFS_FILE = Path(__file__).parent / "item_preferences.json"
 CUSTOM_BRANDS_FILE = Path(__file__).parent / "custom_brands.json"
 HIDDEN_ITEMS_FILE = Path(__file__).parent / "hidden_items.json"
@@ -24,7 +27,9 @@ def load_preferences():
 
 
 def save_preferences(data):
-    """Save item preferences to file."""
+    """Save item preferences to file (local only)."""
+    if IS_CLOUD:
+        return
     try:
         with open(PREFS_FILE, "w") as f:
             json.dump(data, f, indent=2)
@@ -44,7 +49,9 @@ def load_custom_brands():
 
 
 def save_custom_brands(data):
-    """Save custom brands to file."""
+    """Save custom brands to file (local only)."""
+    if IS_CLOUD:
+        return
     try:
         with open(CUSTOM_BRANDS_FILE, "w") as f:
             json.dump(data, f, indent=2)
@@ -64,7 +71,9 @@ def load_hidden_items():
 
 
 def save_hidden_items(data):
-    """Save hidden/deleted items to file."""
+    """Save hidden/deleted items to file (local only)."""
+    if IS_CLOUD:
+        return
     try:
         with open(HIDDEN_ITEMS_FILE, "w") as f:
             json.dump(list(data), f, indent=2)
@@ -84,7 +93,9 @@ def load_custom_items():
 
 
 def save_custom_items(data):
-    """Save custom items to file."""
+    """Save custom items to file (local only)."""
+    if IS_CLOUD:
+        return
     try:
         with open(CUSTOM_ITEMS_FILE, "w") as f:
             json.dump(data, f, indent=2)
