@@ -1,0 +1,10 @@
+# User preference files (keep local, don't deploy to Streamlit Cloud)
+item_preferences.json
+custom_brands.json
+hidden_items.json
+custom_items.json
+
+# Python
+__pycache__/
+venv/
+*.pyc
