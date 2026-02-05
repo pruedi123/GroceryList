@@ -1212,12 +1212,22 @@ with tab2:
         # Group by category
         items_by_category = {}
         for item in st.session_state.item_preferences:
+            found = False
             for category, cat_items in MASTER_LIST.items():
                 if item in cat_items:
                     if category not in items_by_category:
                         items_by_category[category] = []
                     items_by_category[category].append(item)
+                    found = True
                     break
+            if not found:
+                # Check custom items
+                for category, cat_items in st.session_state.custom_items.items():
+                    if item in cat_items:
+                        if category not in items_by_category:
+                            items_by_category[category] = []
+                        items_by_category[category].append(item)
+                        break
 
         for category, items in items_by_category.items():
             st.write(f"**{category}**")
@@ -1282,10 +1292,17 @@ with tab2:
                     with col_edit:
                         if st.button("✏️", key=f"edit_pref_{item}", help="Edit preferences"):
                             # Find the category for this item
+                            found_cat = False
                             for cat, cat_items in MASTER_LIST.items():
                                 if item in cat_items:
                                     st.session_state.open_category = cat
+                                    found_cat = True
                                     break
+                            if not found_cat:
+                                for cat, cat_items in st.session_state.custom_items.items():
+                                    if item in cat_items:
+                                        st.session_state.open_category = cat
+                                        break
                             st.session_state.config_item = item
                             # Switch to Master List tab (tab index 0)
                             st.rerun()
