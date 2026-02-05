@@ -4,6 +4,7 @@
 import streamlit as st
 import json
 from pathlib import Path
+from datetime import datetime, date
 
 # Detect if running on Streamlit Cloud (apps run from /mount/src/)
 IS_CLOUD = str(Path(__file__).parent).startswith("/mount/src")
@@ -1384,7 +1385,7 @@ with tab2:
         st.download_button(
             "📤 Export Preferences",
             json.dumps(all_data, indent=2),
-            file_name="grocery_preferences_backup.json",
+            file_name=f"grocery_preferences_{datetime.now().strftime('%Y%m%d_%H%M')}.json",
             mime="application/json",
             use_container_width=True,
         )
@@ -1508,7 +1509,7 @@ with tab3:
                 items_by_category[cat].append(e)
 
             # Build HTML export
-            from datetime import date
+
             html_lines = []
             html_lines.append("""<!DOCTYPE html>
 <html>
@@ -1648,7 +1649,7 @@ with tab3:
             st.download_button(
                 "📥 Export List",
                 html_text,
-                file_name="grocery_list.html",
+                file_name=f"grocery_list_{datetime.now().strftime('%Y%m%d_%H%M')}.html",
                 mime="text/html",
                 use_container_width=True
             )
