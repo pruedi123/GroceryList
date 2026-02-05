@@ -4,7 +4,8 @@
 import streamlit as st
 import json
 from pathlib import Path
-from datetime import datetime, date
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 # Detect if running on Streamlit Cloud (apps run from /mount/src/)
 IS_CLOUD = str(Path(__file__).parent).startswith("/mount/src")
@@ -1385,7 +1386,7 @@ with tab2:
         st.download_button(
             "📤 Export Preferences",
             json.dumps(all_data, indent=2),
-            file_name=f"grocery_preferences_{datetime.now().strftime('%b%d_%-I-%M%p')}.json",
+            file_name=f"grocery_preferences_{datetime.now(ZoneInfo('America/Chicago')).strftime('%b%d_%-I-%M%p')}.json",
             mime="application/json",
             use_container_width=True,
         )
@@ -1612,7 +1613,7 @@ with tab3:
     <div class="container">
         <div class="header">
             <div class="title">🛒 Grocery List</div>
-            <div class="date">""" + date.today().strftime('%B %d, %Y') + """</div>
+            <div class="date">""" + datetime.now(ZoneInfo('America/Chicago')).strftime('%B %d, %Y') + """</div>
         </div>
 """)
 
@@ -1649,7 +1650,7 @@ with tab3:
             st.download_button(
                 "📥 Export List",
                 html_text,
-                file_name=f"grocery_list_{datetime.now().strftime('%b%d_%-I-%M%p')}.html",
+                file_name=f"grocery_list_{datetime.now(ZoneInfo('America/Chicago')).strftime('%b%d_%-I-%M%p')}.html",
                 mime="text/html",
                 use_container_width=True
             )
