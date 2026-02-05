@@ -3,9 +3,25 @@
 
 import streamlit as st
 import json
+import os
+import re
+import base64
 from pathlib import Path
 from datetime import datetime
 from zoneinfo import ZoneInfo
+from io import BytesIO
+
+try:
+    import anthropic
+    SCANNER_AVAILABLE = True
+except ImportError:
+    SCANNER_AVAILABLE = False
+
+try:
+    from PIL import Image
+    PIL_AVAILABLE = True
+except ImportError:
+    PIL_AVAILABLE = False
 
 # Detect if running on Streamlit Cloud (apps run from /mount/src/)
 IS_CLOUD = str(Path(__file__).parent).startswith("/mount/src")
@@ -111,6 +127,86 @@ def save_custom_items(data):
             json.dump(data, f, indent=2)
     except IOError:
         pass
+
+
+# ── Label Scanner helpers ────────────────────────────────────────────────────
+
+def get_anthropic_client():
+    """Get Anthropic client, checking secrets.toml then environment variable."""
+    if not SCANNER_AVAILABLE:
+        return None
+    api_key = None
+    try:
+        api_key = st.secrets["ANTHROPIC_API_KEY"]
+    except (KeyError, FileNotFoundError):
+        api_key = os.environ.get("ANTHROPIC_API_KEY")
+    if not api_key:
+        return None
+    return anthropic.Anthropic(api_key=api_key)
+
+
+def prepare_image_for_api(image_bytes, max_size=1024):
+    """Resize image if needed and return base64 encoded string and media type."""
+    if not PIL_AVAILABLE:
+        return base64.standard_b64encode(image_bytes).decode("utf-8"), "image/jpeg"
+
+    img = Image.open(BytesIO(image_bytes))
+    fmt = img.format or "JPEG"
+    media_map = {"JPEG": "image/jpeg", "PNG": "image/png", "WEBP": "image/webp"}
+    media_type = media_map.get(fmt.upper(), "image/jpeg")
+
+    if max(img.size) > max_size:
+        img.thumbnail((max_size, max_size), Image.LANCZOS)
+    if img.mode == "RGBA":
+        img = img.convert("RGB")
+        media_type = "image/jpeg"
+
+    buf = BytesIO()
+    save_fmt = "JPEG" if media_type == "image/jpeg" else fmt.upper()
+    img.save(buf, format=save_fmt, quality=85)
+    return base64.standard_b64encode(buf.getvalue()).decode("utf-8"), media_type
+
+
+def analyze_label(client, image_bytes):
+    """Send image to Claude for label analysis. Returns dict with extracted fields."""
+    encoded_image, media_type = prepare_image_for_api(image_bytes)
+
+    categories_str = ", ".join(MASTER_LIST.keys())
+    units_str = ", ".join(UNITS)
+
+    prompt = f"""Analyze this product label/packaging photo. Extract the following information.
+Return ONLY a JSON object (no markdown, no backticks, no explanation):
+
+{{
+  "product_name": "generic item name without brand (e.g. 'Whole Milk' not 'Fairlife Whole Milk')",
+  "brand": "exact brand name as printed on package",
+  "size": "package size as shown (e.g. '16 oz', 'half gal', '1 lb')",
+  "unit": "unit for shopping list — pick from: {units_str}",
+  "category": "best match from: {categories_str}",
+  "notes": "variety, flavor, or special attributes (organic, grass-fed, etc.)"
+}}
+
+If you cannot determine a field, use an empty string."""
+
+    response = client.messages.create(
+        model="claude-sonnet-4-20250514",
+        max_tokens=500,
+        messages=[{
+            "role": "user",
+            "content": [
+                {
+                    "type": "image",
+                    "source": {"type": "base64", "media_type": media_type, "data": encoded_image},
+                },
+                {"type": "text", "text": prompt},
+            ],
+        }],
+    )
+
+    text = response.content[0].text.strip()
+    text = re.sub(r"^```(?:json)?\s*", "", text)
+    text = re.sub(r"\s*```$", "", text)
+    return json.loads(text)
 
 
 # Brand groups - items that share custom brands
@@ -943,6 +1039,12 @@ if "edit_mode" not in st.session_state:
     st.session_state.edit_mode = False
 if "confirm_reset" not in st.session_state:
     st.session_state.confirm_reset = False
+if "scanner_result" not in st.session_state:
+    st.session_state.scanner_result = None
+if "scanner_error" not in st.session_state:
+    st.session_state.scanner_error = None
+if "scanner_success" not in st.session_state:
+    st.session_state.scanner_success = None
 
 
 def get_default_unit(item_name):
@@ -1057,7 +1159,7 @@ if "config_item" in st.session_state and st.session_state.config_item:
     st.divider()
 
 # Create tabs
-tab1, tab2, tab3 = st.tabs(["📋 Master List", "⚙️ My Preferences", "🛒 Shopping List"])
+tab1, tab2, tab3, tab4 = st.tabs(["📋 Master List", "⚙️ My Preferences", "🛒 Shopping List", "📷 Label Scanner"])
 
 # Tab 1: Master List - browse and add items to shopping list
 with tab1:
@@ -1653,4 +1755,171 @@ with tab3:
                 file_name=f"grocery_list_{datetime.now(ZoneInfo('America/Chicago')).strftime('%b%d_%-I-%M%p')}.html",
                 mime="text/html",
                 use_container_width=True
+            )
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# TAB 4: LABEL SCANNER
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+with tab4:
+    st.subheader("Scan Product Labels")
+    st.caption("Take a photo or upload an image of a product label to add it to your preferences.")
+
+    if not SCANNER_AVAILABLE:
+        st.error("Scanner requires the `anthropic` package. Install with: `pip install anthropic`")
+    else:
+        client = get_anthropic_client()
+        if client is None:
+            st.warning(
+                "**API key not found.** Set `ANTHROPIC_API_KEY` in "
+                "`.streamlit/secrets.toml` or as an environment variable."
+            )
+        else:
+            # Show success message from previous scan
+            if st.session_state.scanner_success:
+                st.success(st.session_state.scanner_success)
+                st.session_state.scanner_success = None
+
+            # Image input
+            input_method = st.radio(
+                "Input method",
+                ["📷 Camera", "📁 Upload"],
+                horizontal=True,
+                label_visibility="collapsed",
+            )
+
+            image_bytes = None
+            if input_method == "📷 Camera":
+                camera_photo = st.camera_input("Point at the product label")
+                if camera_photo is not None:
+                    image_bytes = camera_photo.getvalue()
+            else:
+                uploaded_label = st.file_uploader(
+                    "Upload a label photo",
+                    type=["jpg", "jpeg", "png", "webp"],
+                    key="label_upload",
+                )
+                if uploaded_label is not None:
+                    image_bytes = uploaded_label.getvalue()
+
+            # Scan button
+            if image_bytes is not None:
+                if st.button("🔍 Analyze Label", type="primary", use_container_width=True):
+                    with st.spinner("Reading label..."):
+                        try:
+                            result = analyze_label(client, image_bytes)
+                            st.session_state.scanner_result = result
+                            st.session_state.scanner_error = None
+                        except json.JSONDecodeError:
+                            st.session_state.scanner_error = "Couldn't parse the label. Try a clearer photo."
+                            st.session_state.scanner_result = None
+                        except Exception as e:
+                            st.session_state.scanner_error = str(e)
+                            st.session_state.scanner_result = None
+                    st.rerun()
+
+            # Show error
+            if st.session_state.scanner_error:
+                st.error(f"Analysis failed: {st.session_state.scanner_error}")
+
+            # Show editable results
+            if st.session_state.scanner_result:
+                st.divider()
+                result = st.session_state.scanner_result
+                categories = list(MASTER_LIST.keys())
+
+                st.write("**Review & Edit Scanned Details**")
+
+                col1, col2 = st.columns(2)
+                with col1:
+                    product_name = st.text_input(
+                        "Product Name",
+                        value=result.get("product_name", ""),
+                        key="scan_product_name",
+                    )
+                    suggested_cat = result.get("category", "")
+                    cat_index = categories.index(suggested_cat) if suggested_cat in categories else 0
+                    category = st.selectbox(
+                        "Category", categories, index=cat_index, key="scan_category"
+                    )
+
+                with col2:
+                    brand = st.text_input(
+                        "Brand",
+                        value=result.get("brand", ""),
+                        key="scan_brand",
+                    )
+                    suggested_unit = result.get("unit", "each")
+                    unit_index = UNITS.index(suggested_unit) if suggested_unit in UNITS else 0
+                    unit = st.selectbox(
+                        "Unit", UNITS, index=unit_index, key="scan_unit"
+                    )
+
+                size_col, notes_col = st.columns(2)
+                with size_col:
+                    size = st.text_input(
+                        "Size", value=result.get("size", ""), key="scan_size"
+                    )
+                with notes_col:
+                    notes = st.text_input(
+                        "Notes", value=result.get("notes", "") or "", key="scan_notes"
+                    )
+
+                # Check if item already exists
+                existing_item = None
+                for cat, items in MASTER_LIST.items():
+                    if product_name in items:
+                        existing_item = cat
+                        break
+                if not existing_item:
+                    for cat, items in st.session_state.custom_items.items():
+                        if product_name in items:
+                            existing_item = cat
+                            break
+
+                if existing_item:
+                    st.info(f"**{product_name}** exists in {existing_item}. Will update its brand/unit preference.")
+                else:
+                    st.info(f"**{product_name}** is new. Will add to **{category}** and save preference.")
+
+                # Action buttons
+                btn_add, btn_skip = st.columns(2)
+                with btn_add:
+                    if st.button("✅ Add to Preferences", type="primary", use_container_width=True):
+                        name = product_name.strip()
+                        if not name:
+                            st.error("Product name is required.")
+                        else:
+                            # Add as custom item if it doesn't exist anywhere
+                            if not existing_item:
+                                if category not in st.session_state.custom_items:
+                                    st.session_state.custom_items[category] = {}
+                                st.session_state.custom_items[category][name] = unit
+                                save_custom_items(st.session_state.custom_items)
+
+                            # Save brand/unit preference
+                            display_unit = f"{size} {unit}".strip() if size else unit
+                            st.session_state.item_preferences[name] = {
+                                "unit": display_unit,
+                                "brand": brand.strip(),
+                            }
+                            save_preferences(st.session_state.item_preferences)
+
+                            st.session_state.scanner_result = None
+                            st.session_state.scanner_success = (
+                                f"Added **{name}**"
+                                + (f" ({brand})" if brand.strip() else "")
+                                + f" to {existing_item or category}"
+                            )
+                            st.rerun()
+
+                with btn_skip:
+                    if st.button("🗑 Discard", use_container_width=True):
+                        st.session_state.scanner_result = None
+                        st.rerun()
+
+            st.divider()
+            st.caption(
+                "**Tips:** Hold the product so the brand name and size are clearly visible. "
+                "Front labels usually work better than nutrition panels."
             )

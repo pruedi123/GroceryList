@@ -4,6 +4,9 @@ custom_brands.json
 hidden_items.json
 custom_items.json
 
+# Secrets
+.streamlit/secrets.toml
+
 # Python
 __pycache__/
 venv/
