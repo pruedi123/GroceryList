@@ -1385,7 +1385,7 @@ with tab2:
         st.download_button(
             "📤 Export Preferences",
             json.dumps(all_data, indent=2),
-            file_name=f"grocery_preferences_{datetime.now().strftime('%Y%m%d_%H%M')}.json",
+            file_name=f"grocery_preferences_{datetime.now().strftime('%b%d_%-I-%M%p')}.json",
             mime="application/json",
             use_container_width=True,
         )
@@ -1649,7 +1649,7 @@ with tab3:
             st.download_button(
                 "📥 Export List",
                 html_text,
-                file_name=f"grocery_list_{datetime.now().strftime('%Y%m%d_%H%M')}.html",
+                file_name=f"grocery_list_{datetime.now().strftime('%b%d_%-I-%M%p')}.html",
                 mime="text/html",
                 use_container_width=True
             )
